@@ -1,7 +1,5 @@
 #!/bin/bash
 
-GOTIFY_PRIORITY=5
-
 print_help() {
   echo "Docker backup tool"
   echo ""
@@ -37,7 +35,7 @@ create_backup_config_template() {
   date_str=$(date +"%Y-%m-%d %H:%M:%S")
   echo "DATE_STR: ${date_str}"
   
-  template_str=$(sudo docker container ls  --format '{"name": "{{.Names}}", "id": "{{.ID}}", "image": "{{.Image}}", "state": "{{.State}}", "storage_dir": ""}' | jq -s --arg d "${date_str}" '{created: $d, backup_base_dir: "", backup_items: ., notification: {type: "gotify", url: "", token: ""} }')
+  template_str=$(sudo docker container ls  --format '{"name": "{{.Names}}", "id": "{{.ID}}", "image": "{{.Image}}", "state": "{{.State}}", "storage_dir": ""}' | jq -s --arg d "${date_str}" '{created: $d, backup_base_dir: "", backup_items: ., notification: {type: "gotify", url: "", token: "", hostname: "", priority: "5"} }')
 
   echo "${template_str}" > $1
 }
@@ -158,27 +156,30 @@ backup_all() {
 }
 
 send_gotify() {
-#  echo ">>> send_gotify: $1, $2, $3 $4"
-  curl "$1/message?token=$2" -F "title=$3" -F "message=$4" -F "priority=${GOTIFY_PRIORITY}" -o /dev/null --silent
+#  echo ">>> send_gotify: $1, $2, $3, $4, $5"
+  curl "${1}/message?token=${2}" -F "title=${3}" -F "message=${4}" -F "priority=${5}" -o /dev/null --silent
 }
 
 send_notification() {
   ntype=$(jq '.notification.type' ${backup_config_file} | sed -s 's/\"//g' )
 
-  case "$ntype" in
+  case "${ntype}" in
     "gotify")
       echo "sending notification via gotify"
       url=$(jq '.notification.url' ${backup_config_file} | sed -s 's/\"//g' )
       token=$(jq '.notification.token' ${backup_config_file} | sed -s 's/\"//g' )
+      hostname=$(jq '.notification.hostname' ${backup_config_file} | sed -s 's/\"//g' )
+      priority=$(jq '.notification.priority' ${backup_config_file} | sed -s 's/\"//g' )
+
 #     echo "GOTIFY: $url, $token"
 
-      send_gotify "${url}" "${token}" "DOCKER backup `hostname -A`" "$notification"
+      send_gotify "${url}" "${token}" "${hostname} - docker backup" "${notification}" "${priority}"
       ;;
     "console")
       echo "RESULT: ${notification}"
       ;;
     *)
-      echo "skipping notiifcation (ntype=$ntype)"
+      echo "skipping notiifcation (ntype=${ntype})"
       ;;
   esac
 }
